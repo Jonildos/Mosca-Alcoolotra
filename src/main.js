@@ -78,44 +78,99 @@ function resizeCanvas() {
 }
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas(); // Chama a primeira vez para inicializar
-// --- 5. A Entidade Biológica (Mosca) ---
+// --- 5. A Entidade Biológica (Mosca com Consciência Espacial) ---
 class VirtualFly {
   constructor(x, y) {
     this.x = x;
     this.y = y;
+    this.vx = 0;
+    this.vy = 0;
     this.color = "#ffffff";
-    this.state = "idle"; // Estados: idle, drinking, fleeing
+    this.state = "idle";
+    this.speedLimit = 2;
+    
+    // Forças que vão agir sobre a mosca
+    this.attractionForce = 0;
   }
 
-  // O Sistema Sensorial: Lê o estado do mundo (o copo)
   evaluateEnvironment(shaker) {
     if (shaker.ingredients.length === 0) {
       this.state = "idle";
-      this.color = "#aaaaaa"; // Cinza (entediada)
+      this.color = "#aaaaaa"; 
       brainActivityElement.textContent = "Inativa (Aguardando)";
+      this.attractionForce = 0;
+      this.speedLimit = 1.5;
       return;
     }
 
-    // Regra biológica de sobrevivência: Toxina tem prioridade sobre recompensa
     if (shaker.toxicityLevel > shaker.rewardLevel) {
       this.state = "fleeing";
-      this.color = "#ff4444"; // Vermelho (pânico)
-      brainActivityElement.textContent = "PÂNICO! Fuga ativada pelas toxinas.";
+      this.color = "#ff4444"; 
+      brainActivityElement.textContent = "PÂNICO! Fugindo do alvo.";
+      // Força negativa = Repulsão (foge do copo)
+      this.attractionForce = -0.5; 
+      this.speedLimit = 8; 
     } 
-    // Se a recompensa for alta e a toxina baixa
     else if (shaker.rewardLevel >= 10) {
       this.state = "drinking";
-      this.color = "#44ff44"; // Verde (dopamina alta)
-      brainActivityElement.textContent = "DOPAMINA: A mosca aprova o drink!";
+      this.color = "#44ff44"; 
+      brainActivityElement.textContent = "DOPAMINA: Focada na recompensa!";
+      // Força positiva forte = Atração (vai direto para o copo)
+      this.attractionForce = 0.8; 
+      this.speedLimit = 5;
     } 
     else {
       this.state = "curious";
-      this.color = "#ffff44"; // Amarelo (analisando)
-      brainActivityElement.textContent = "Curiosa... precisa de mais ingredientes.";
+      this.color = "#ffff44"; 
+      brainActivityElement.textContent = "Curiosa... investigando o ambiente.";
+      // Força positiva fraca = Atração lenta
+      this.attractionForce = 0.1; 
+      this.speedLimit = 2;
     }
   }
 
-  // Renderiza a mosca no Canvas
+  updatePhysics(canvasWidth, canvasHeight, targetX, targetY) {
+    // 1. O Rastreamento Espacial (Seu raciocínio aplicado vetorialmente)
+    if (this.attractionForce !== 0) {
+      const dx = targetX - this.x;
+      const dy = targetY - this.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Evita divisão por zero se a mosca estiver exatamente no centro
+      if (distance > 0) {
+        // Normaliza e multiplica pela força de atração/repulsão
+        const forceX = (dx / distance) * this.attractionForce;
+        const forceY = (dy / distance) * this.attractionForce;
+
+        this.vx += forceX;
+        this.vy += forceY;
+      }
+    } else {
+      // Movimento caótico neutro se não houver alvo interessante
+      this.vx += (Math.random() - 0.5) * 0.5;
+      this.vy += (Math.random() - 0.5) * 0.5;
+    }
+
+    // 2. Limite de Velocidade
+    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    if (speed > this.speedLimit) {
+      this.vx = (this.vx / speed) * this.speedLimit;
+      this.vy = (this.vy / speed) * this.speedLimit;
+    }
+
+    // 3. Aplica Posição e Atrito
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vx *= 0.95;
+    this.vy *= 0.95;
+
+    // 4. Bordas
+    if (this.x < 10 || this.x > canvasWidth - 10) this.vx *= -1;
+    if (this.y < 10 || this.y > canvasHeight - 10) this.vy *= -1;
+    this.x = Math.max(10, Math.min(this.x, canvasWidth - 10));
+    this.y = Math.max(10, Math.min(this.y, canvasHeight - 10));
+  }
+
   draw(ctx) {
     ctx.beginPath();
     ctx.arc(this.x, this.y, 10, 0, Math.PI * 2);
@@ -124,21 +179,31 @@ class VirtualFly {
     ctx.closePath();
   }
 }
+const myFly = new VirtualFly(canvas.width / 4, canvas.height / 4);
 
-const myFly = new VirtualFly(canvas.width / 2, canvas.height / 2);
 // --- 6. O Game Loop (Motor da Simulação) ---
 function animate() {
-  // 1. Limpa o frame anterior (fundo escuro)
   ctx.fillStyle = "#222222";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 2. A mosca avalia o copo continuamente
-  myFly.evaluateEnvironment(myShaker);
+  // Define onde o copo está (Centro da tela)
+  const cupX = canvas.width / 2;
+  const cupY = canvas.height / 2;
 
-  // 3. Desenha a mosca atualizada
+  // Desenha o Copo no Canvas para referência visual
+  ctx.beginPath();
+  ctx.arc(cupX, cupY, 30, 0, Math.PI * 2);
+  ctx.fillStyle = myShaker.ingredients.length > 0 ? "rgba(255, 255, 255, 0.2)" : "rgba(100, 100, 100, 0.1)";
+  ctx.fill();
+  ctx.strokeStyle = "#ffffff";
+  ctx.stroke();
+  ctx.closePath();
+
+  // Ciclo da mosca
+  myFly.evaluateEnvironment(myShaker);
+  myFly.updatePhysics(canvas.width, canvas.height, cupX, cupY);
   myFly.draw(ctx);
 
-  // 4. Pede ao navegador para chamar essa função no próximo frame
   requestAnimationFrame(animate);
 }
 
