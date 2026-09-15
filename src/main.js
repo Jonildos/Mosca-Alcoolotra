@@ -1,31 +1,24 @@
 // src/main.js
 
-// 1. Definição do Estado da Aplicação (O Backend do nosso Frontend)
+// --- 1. Definição do Estado da Aplicação (O Copo) ---
 class CocktailShaker {
   constructor() {
-    this.ingredients = []; // Guarda o que tem no copo
-    this.rewardLevel = 0;  // Quão doce/gostoso está (atrai a mosca)
-    this.toxicityLevel = 0; // Quão alcoólico/amargo está (afasta a mosca)
+    this.ingredients = []; 
+    this.rewardLevel = 0;  
+    this.toxicityLevel = 0; 
   }
 
-  // Método para adicionar um ingrediente e recalcular os estímulos
   addIngredient(name, reward, toxicity) {
     if (this.ingredients.length >= 5) {
       console.warn("[Shaker] O copo já está cheio!");
       return;
     }
-
     this.ingredients.push(name);
     this.rewardLevel += reward;
     this.toxicityLevel += toxicity;
-    
-    console.log(`[Shaker] Adicionado: ${name} | Recompensa: ${this.rewardLevel} | Toxina: ${this.toxicityLevel}`);
-    
-    // Sempre que o estado muda, atualizamos a interface
     this.updateUI();
   }
 
-  // Método para limpar o copo
   reset() {
     this.ingredients = [];
     this.rewardLevel = 0;
@@ -33,10 +26,8 @@ class CocktailShaker {
     this.updateUI();
   }
 
-  // 2. Sincronização com o DOM (O Espelho)
   updateUI() {
     const cupStatusElement = document.getElementById("cup-status");
-    
     if (this.ingredients.length === 0) {
       cupStatusElement.textContent = "Vazio";
     } else {
@@ -45,167 +36,257 @@ class CocktailShaker {
   }
 }
 
-// 3. Inicialização e Conexão dos Eventos
+// --- 2. Inicialização e Conexão dos Eventos ---
 const myShaker = new CocktailShaker();
 
-// Mapeando os botões do HTML
 document.getElementById("btn-sugar").addEventListener("click", () => {
-  // Açúcar dá muita recompensa e nenhuma toxina
   myShaker.addIngredient("Açúcar", 10, 0); 
 });
 
 document.getElementById("btn-alcohol").addEventListener("click", () => {
-  // Álcool puro dá toxina altíssima e pouca recompensa
   myShaker.addIngredient("Álcool Puro", 2, 15); 
 });
 
 document.getElementById("btn-water").addEventListener("click", () => {
-  // Água dilui, não dá recompensa nem toxina
   myShaker.addIngredient("Água", 0, 0); 
 });
-// Vamos guardar as referências do DOM para uso futuro
+
 const cupStatusElement = document.getElementById("cup-status");
 const brainActivityElement = document.getElementById("brain-activity");
 
-// --- 4. Configuração do Motor Gráfico (Canvas) ---
+// --- 3. Configuração do Motor Gráfico (Canvas) ---
 const canvas = document.getElementById("world-canvas");
 const ctx = canvas.getContext("2d");
 
-// Ajustar o tamanho interno do canvas para corresponder ao CSS
 function resizeCanvas() {
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
 }
 window.addEventListener("resize", resizeCanvas);
-resizeCanvas(); // Chama a primeira vez para inicializar
-// --- 5. A Entidade Biológica (Mosca com Consciência Espacial) ---
+resizeCanvas(); 
+
+// --- 4. O Cérebro Neural (Micro Connectome) ---
+class MicroConnectome {
+  constructor() {
+    // Matriz de Pesos: [Açúcar, Toxina, Água] x [Atração, Fuga, Beber]
+    this.baseWeights = [
+      [  2.0,   0.0,   1.5 ], // Açúcar
+      [ -1.0,   2.0,  -2.0 ], // Toxina
+      [  0.5,   0.0,   1.0 ]  // Água
+    ];
+  }
+
+  relu(x) { return Math.max(0, x); }
+
+  processSensors(sugarLevel, toxinLevel, waterLevel, hungerLevel) {
+    const inputs = [sugarLevel, toxinLevel, waterLevel];
+    let outputs = [0, 0, 0]; 
+
+    // Modulação Hormonal da Fome (Hackeia os pesos originais)
+    let currentWeights = JSON.parse(JSON.stringify(this.baseWeights)); 
+    
+    // Se a fome for altíssima, o peso inibitório da toxina cai drasticamente
+    currentWeights[1][2] *= (1.0 - (hungerLevel * 0.95)); 
+    
+    // A fome aumenta o desespero por atração de líquidos
+    currentWeights[2][0] += hungerLevel * 3.0; 
+
+    // Multiplicação da Matriz
+    for (let i = 0; i < inputs.length; i++) {
+      for (let j = 0; j < outputs.length; j++) {
+        outputs[j] += inputs[i] * currentWeights[i][j];
+      }
+    }
+
+    return {
+      attraction: this.relu(outputs[0]),
+      fleeing: this.relu(outputs[1]),
+      drinking: this.relu(outputs[2])
+    };
+  }
+}
+
+// --- 5. A Entidade Biológica Modificada ---
 class VirtualFly {
   constructor(x, y) {
+    // Fisiologia de Voo
     this.x = x;
     this.y = y;
     this.vx = 0;
     this.vy = 0;
-    this.color = "#ffffff";
-    this.state = "idle";
-    this.speedLimit = 2;
+    this.angle = 0; 
     
-    // Forças que vão agir sobre a mosca
-    this.attractionForce = 0;
+    // Memória e Estado Interno
+    this.satiation = 50; // Começa com metade da fome
+    this.wanderAngle = Math.random() * Math.PI * 2; 
+    this.inebriationLevel = 0.0; 
+    
+    // Conectoma
+    this.brain = new MicroConnectome(); 
+    this.color = "#ffffff";
+    this.baseSpeed = 4;
+    this.desiredAngle = 0;
   }
 
-  evaluateEnvironment(shaker) {
-    if (shaker.ingredients.length === 0) {
-      this.state = "idle";
-      this.color = "#aaaaaa"; 
-      brainActivityElement.textContent = "Inativa (Aguardando)";
-      this.attractionForce = 0;
-      this.speedLimit = 1.5;
-      return;
+  evaluateEnvironment(shaker, targetX, targetY) {
+    const dx = targetX - this.x;
+    const dy = targetY - this.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // 1. Metabolismo Base
+    this.satiation = Math.max(0, this.satiation - 0.1); 
+    if (distance > 60) {
+        this.inebriationLevel = Math.max(0.0, this.inebriationLevel - 0.001); 
     }
 
-    if (shaker.toxicityLevel > shaker.rewardLevel) {
-      this.state = "fleeing";
+    // 2. Leitura Sensorial (Fome inverte a saciedade para a matemática neural)
+    const hungerLevel = 1.0 - (this.satiation / 100);
+    
+    // O cheiro só chega se ela estiver a menos de 150px
+    const inRange = distance < 150;
+    const sensedSugar = inRange ? shaker.rewardLevel : 0;
+    const sensedToxin = inRange ? shaker.toxicityLevel : 0;
+    const sensedWater = inRange ? (shaker.ingredients.includes("Água") ? 5 : 0) : 0;
+
+    // A matriz neural calcula os impulsos baseados nos sensores e no hormônio da fome
+    const impulses = this.brain.processSensors(sensedSugar, sensedToxin, sensedWater, hungerLevel);
+
+    // Atualiza o ângulo de exploração para caso ela decida voar livremente
+    this.wanderAngle += (Math.random() - 0.5) * 0.3; 
+
+    // 3. Interação Fisiológica (Se beber, soma calorias ou toxinas na corrente sanguínea)
+    if (distance < 30 && impulses.drinking > 0) {
+       this.satiation = Math.min(100, this.satiation + (impulses.drinking * 0.5));
+       if (shaker.toxicityLevel > 0) {
+         this.inebriationLevel = Math.min(1.0, this.inebriationLevel + (shaker.toxicityLevel * 0.002));
+       }
+    }
+
+    // 4. Decisão Motora (Para onde voar)
+    if (impulses.fleeing > impulses.attraction && impulses.fleeing > 0.5) {
       this.color = "#ff4444"; 
-      brainActivityElement.textContent = "PÂNICO! Fugindo do alvo.";
-      // Força negativa = Repulsão (foge do copo)
-      this.attractionForce = -0.5; 
-      this.speedLimit = 8; 
+      brainActivityElement.textContent = "PÂNICO (Rede Neural)";
+      this.desiredAngle = Math.atan2(dy, dx) + Math.PI; 
+      this.baseSpeed = 4 + impulses.fleeing; 
     } 
-    else if (shaker.rewardLevel >= 10) {
-      this.state = "drinking";
+    else if (impulses.attraction > impulses.fleeing && impulses.attraction > 0.5) {
       this.color = "#44ff44"; 
-      brainActivityElement.textContent = "DOPAMINA: Focada na recompensa!";
-      // Força positiva forte = Atração (vai direto para o copo)
-      this.attractionForce = 0.8; 
-      this.speedLimit = 5;
+      brainActivityElement.textContent = "ATRAÇÃO (Rede Neural)";
+      this.desiredAngle = Math.atan2(dy, dx); 
+      this.baseSpeed = 3 + (impulses.attraction * 0.5);
     } 
     else {
-      this.state = "curious";
-      this.color = "#ffff44"; 
-      brainActivityElement.textContent = "Curiosa... investigando o ambiente.";
-      // Força positiva fraca = Atração lenta
-      this.attractionForce = 0.1; 
-      this.speedLimit = 2;
+      // Voo livre/errante
+      this.color = this.satiation > 70 ? "#88ff88" : "#aaaaaa"; 
+      brainActivityElement.textContent = this.satiation > 70 ? "Saciada e Explorando" : "Buscando estímulos";
+      this.desiredAngle = this.wanderAngle;
+      this.baseSpeed = 2;
+      
+      // Sensores de colisão com a parede do Canvas
+      if (this.x < 50 || this.x > canvas.width - 50 || this.y < 50 || this.y > canvas.height - 50) {
+         this.desiredAngle = Math.atan2(canvas.height/2 - this.y, canvas.width/2 - this.x);
+         this.wanderAngle = this.desiredAngle; 
+      }
     }
   }
 
-  updatePhysics(canvasWidth, canvasHeight, targetX, targetY) {
-    // 1. O Rastreamento Espacial (Seu raciocínio aplicado vetorialmente)
-    if (this.attractionForce !== 0) {
-      const dx = targetX - this.x;
-      const dy = targetY - this.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+  updatePhysics(canvasWidth, canvasHeight) {
+    // Cálculo do Erro Angular (Sensor Vestibular)
+    let errorAngle = this.desiredAngle - this.angle;
+    errorAngle = Math.atan2(Math.sin(errorAngle), Math.cos(errorAngle));
 
-      // Evita divisão por zero se a mosca estiver exatamente no centro
-      if (distance > 0) {
-        // Normaliza e multiplica pela força de atração/repulsão
-        const forceX = (dx / distance) * this.attractionForce;
-        const forceY = (dy / distance) * this.attractionForce;
+    // A toxina derruba o peso do controle neural sobre os motores
+    const motorControlWeight = 1.0 - this.inebriationLevel; 
+    
+    let leftWingPulse = this.baseSpeed + (errorAngle * motorControlWeight * 3);
+    let rightWingPulse = this.baseSpeed - (errorAngle * motorControlWeight * 3);
 
-        this.vx += forceX;
-        this.vy += forceY;
-      }
-    } else {
-      // Movimento caótico neutro se não houver alvo interessante
-      this.vx += (Math.random() - 0.5) * 0.5;
-      this.vy += (Math.random() - 0.5) * 0.5;
-    }
+    // Toxina causa espasmos nas asas
+    const spasm = () => (Math.random() - 0.5) * this.inebriationLevel * 15;
+    leftWingPulse += spasm();
+    rightWingPulse += spasm();
 
-    // 2. Limite de Velocidade
-    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    if (speed > this.speedLimit) {
-      this.vx = (this.vx / speed) * this.speedLimit;
-      this.vy = (this.vy / speed) * this.speedLimit;
-    }
+    // Cinemática Diferencial
+    const angularVelocity = (leftWingPulse - rightWingPulse) * 0.1;
+    const linearVelocity = (leftWingPulse + rightWingPulse) / 2;
 
-    // 3. Aplica Posição e Atrito
+    this.angle += angularVelocity;
+    this.vx = Math.cos(this.angle) * linearVelocity;
+    this.vy = Math.sin(this.angle) * linearVelocity;
+
     this.x += this.vx;
     this.y += this.vy;
-    this.vx *= 0.95;
-    this.vy *= 0.95;
 
-    // 4. Bordas
-    if (this.x < 10 || this.x > canvasWidth - 10) this.vx *= -1;
-    if (this.y < 10 || this.y > canvasHeight - 10) this.vy *= -1;
-    this.x = Math.max(10, Math.min(this.x, canvasWidth - 10));
-    this.y = Math.max(10, Math.min(this.y, canvasHeight - 10));
+    // Limites absolutos do vidro (Canvas)
+    if (this.x < 15 || this.x > canvasWidth - 15) {
+        this.angle = Math.PI - this.angle; 
+        this.x = Math.max(15, Math.min(this.x, canvasWidth - 15));
+    }
+    if (this.y < 15 || this.y > canvasHeight - 15) {
+        this.angle = -this.angle; 
+        this.y = Math.max(15, Math.min(this.y, canvasHeight - 15));
+    }
   }
 
   draw(ctx) {
+    ctx.save(); 
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+
+    // Desenho anatômico
     ctx.beginPath();
-    ctx.arc(this.x, this.y, 10, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 12, 8, 0, 0, Math.PI * 2);
     ctx.fillStyle = this.color;
     ctx.fill();
+    ctx.strokeStyle = "#222";
+    ctx.stroke();
     ctx.closePath();
+
+    ctx.beginPath();
+    ctx.arc(10, 0, 5, 0, Math.PI * 2);
+    ctx.fillStyle = this.inebriationLevel > 0.5 ? "#8a2be2" : "#ff0000"; 
+    ctx.fill();
+    ctx.closePath();
+    ctx.restore(); 
+
+    // Telemetria Visual (HUD)
+    ctx.fillStyle = "white";
+    ctx.font = "12px monospace";
+    ctx.fillText(`Fome: ${(100 - this.satiation).toFixed(0)}`, this.x - 25, this.y - 20);
+    if(this.inebriationLevel > 0.05) {
+      ctx.fillStyle = "#8a2be2";
+      ctx.fillText(`Álcool: ${(this.inebriationLevel * 100).toFixed(0)}%`, this.x - 30, this.y - 35);
+    }
   }
 }
-const myFly = new VirtualFly(canvas.width / 4, canvas.height / 4);
 
 // --- 6. O Game Loop (Motor da Simulação) ---
+const myFly = new VirtualFly(canvas.width / 4, canvas.height / 4);
+
 function animate() {
-  ctx.fillStyle = "#222222";
+  ctx.fillStyle = "#111111"; 
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Define onde o copo está (Centro da tela)
   const cupX = canvas.width / 2;
   const cupY = canvas.height / 2;
 
-  // Desenha o Copo no Canvas para referência visual
+  // Copo
   ctx.beginPath();
   ctx.arc(cupX, cupY, 30, 0, Math.PI * 2);
-  ctx.fillStyle = myShaker.ingredients.length > 0 ? "rgba(255, 255, 255, 0.2)" : "rgba(100, 100, 100, 0.1)";
+  ctx.fillStyle = myShaker.ingredients.length > 0 ? "rgba(255, 255, 255, 0.15)" : "rgba(100, 100, 100, 0.1)";
   ctx.fill();
-  ctx.strokeStyle = "#ffffff";
+  ctx.strokeStyle = "#555";
+  ctx.lineWidth = 2;
   ctx.stroke();
   ctx.closePath();
 
-  // Ciclo da mosca
-  myFly.evaluateEnvironment(myShaker);
-  myFly.updatePhysics(canvas.width, canvas.height, cupX, cupY);
+  // Execução
+  myFly.evaluateEnvironment(myShaker, cupX, cupY);
+  myFly.updatePhysics(canvas.width, canvas.height);
   myFly.draw(ctx);
 
   requestAnimationFrame(animate);
 }
 
-// Ligar o motor!
+// Inicializa a renderização
 animate();
