@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Laboratório da Mosca Bartender</title>
+    <link rel="stylesheet" href="src/style.css" />
+  </head>
+  <body>
+    <main class="app-container">
+      <!-- Painel de Controle (Inputs Sensoriais) -->
+      <aside class="control-panel">
+        <h2>Ingredientes (Estímulos)</h2>
+        <button id="btn-sugar" class="ingredient">Açúcar (Recompensa)</button>
+        <button id="btn-alcohol" class="ingredient">Álcool Puro (Toxina/Fuga)</button>
+        <button id="btn-water" class="ingredient">Água (Neutro)</button>
+        
+        <hr>
+        <div class="status-monitor">
+          <p>Estado do Copo: <span id="cup-status">Vazio</span></p>
+          <p>Atividade Cerebral: <span id="brain-activity">Inativa</span></p>
+        </div>
+      </aside>
+
+      <!-- Renderização de Alta Performance (O Mundo da Mosca) -->
+      <section class="simulation-view">
+        <canvas id="world-canvas"></canvas>
+      </section>
+    </main>
+
+    <!-- Ponto de entrada do nosso JavaScript -->
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
